@@ -1,0 +1,19 @@
+# Local secrets and credentials (never commit)
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+*.pem
+*.key
+*.p12
+*.pfx
+aws-credentials*.csv
+
+# Python environments and generated files
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Operating-system files
+.DS_Store
