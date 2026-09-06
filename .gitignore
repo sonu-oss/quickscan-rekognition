@@ -1,4 +1,4 @@
-# Local secrets and credentials (never commit)
+# Secrets and credentials
 .env
 .env.*
 !.env.example
@@ -11,9 +11,23 @@ aws-credentials*.csv
 
 # Python environments and generated files
 __pycache__/
-*.pyc
+*.py[codz]
+*$py.class
 .venv/
 venv/
+env/
+ENV/
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
-# Operating-system files
+# OS and editor files
 .DS_Store
+Thumbs.db
+.vscode/
+.idea/

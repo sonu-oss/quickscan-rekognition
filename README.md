@@ -1,183 +1,83 @@
 # QuickScan Express
 
-**Automated Visual Point-of-Sale & Object Scanner, powered by Amazon Rekognition.**
+Automated visual point-of-sale and object scanner powered by Amazon Rekognition.
 
-Upload a photo of a checkout tray, and QuickScan Express detects every item,
-draws a bounding box around each one, and lists it in a table with a
-confidence score — no barcode needed.
+Upload a photo of a checkout tray. QuickScan detects visible objects, draws their bounding boxes, and presents confidence-scored inventory tables—without barcodes.
 
----
+## Features
 
-## 1. Problem it solves
+- Sends images directly to Amazon Rekognition `DetectLabels`; no S3 bucket is required.
+- Annotates detected objects with bounding boxes and labels.
+- Shows item summary and detailed audit tables.
+- Exports the scan summary to CSV.
+- Keeps AWS credentials local through environment variables, an AWS profile, or an ignored `.env` file.
 
-- Traditional checkout requires scanning individual barcodes → queues and
-  bottlenecks.
-- Un-barcoded items (loose fruit, pastries, bulk goods) rely on manual
-  visual inspection by staff, which is slow and error-prone.
+## Stack
 
-## 2. How it works
+- [Streamlit](https://streamlit.io/)
+- Amazon Rekognition via `boto3`
+- Pillow, pandas, and python-dotenv
 
-```
-User uploads          boto3 sends           Rekognition returns          Pillow draws          Streamlit shows
-tray photo      ──►    image bytes    ──►    labels + bounding    ──►    boxes on the    ──►    annotated image +
-(Streamlit)             (in-memory,           box coordinates            image                   summary table
-                         no S3 needed)         (as % of image)
-```
+## Prerequisites
 
-1. **Image ingestion** — user uploads an image through the Streamlit UI.
-2. **AWS API integration** — the raw image bytes are sent straight to
-   Amazon Rekognition's `detect_labels` API via `boto3` (no S3 upload step —
-   Rekognition accepts inline bytes up to 5MB, which keeps this demo simple).
-3. **Bounding box extraction** — Rekognition returns a JSON payload with
-   label names, confidence scores, and (for physical objects) bounding box
-   geometry as *ratios* of image width/height: `Left`, `Top`, `Width`, `Height`.
-4. **Visual rendering** — the app converts those ratios into pixel
-   coordinates for the specific uploaded image and draws boxes + captions
-   with Pillow.
-5. **Output display** — side-by-side original vs. annotated image, plus a
-   Pandas-powered summary table (item, count, average confidence, whether
-   it has a physical location) and a CSV export button.
+- Python 3.10+
+- An AWS account with credentials permitted to call `rekognition:DetectLabels`
 
-## 3. Tech stack
+Attach the minimal policy in [`iam-policy.json`](iam-policy.json) to the IAM user or role used by the app.
 
-| Layer | Technology |
-|---|---|
-| Frontend / UI | Streamlit |
-| Computer vision | Amazon Rekognition (`detect_labels`) |
-| AWS SDK | boto3 |
-| Image annotation | Pillow (PIL) |
-| Data / reporting | pandas |
-| Config | python-dotenv |
-
-## 4. Project structure
-
-```
-quickscan-express/
-├── app.py                     # Streamlit UI + orchestration
-├── src/
-│   ├── rekognition_client.py  # boto3 wrapper: calls DetectLabels, parses response
-│   ├── image_utils.py         # Draws bounding boxes with Pillow
-│   └── report.py              # Builds pandas summary/detail tables
-├── requirements.txt
-├── .env.example                # Template for local AWS credentials
-├── iam-policy.json             # Minimal IAM permissions needed
-└── README.md
-```
-
----
-
-## 5. Setup
-
-### Prerequisites
+## Setup
 
 ```bash
-# Python 3.10+
-python3 --version
+git clone https://github.com/sonu-oss/quickscan-rekognition.git
+cd quickscan-rekognition
 
-# AWS CLI (used to configure credentials)
-# macOS:
-brew install awscli
-# Windows/Linux: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
-```
-
-You need an AWS account. Create an IAM user (or use an existing one) with
-**only** the permission this app needs — see `iam-policy.json`:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "QuickScanRekognitionAccess",
-      "Effect": "Allow",
-      "Action": ["rekognition:DetectLabels"],
-      "Resource": "*"
-    }
-  ]
-}
-```
-
-In the AWS Console: **IAM → Users → your user → Add permissions → Attach
-policies directly → Create policy → paste the JSON above.**
-
-### Configure credentials (choose one)
-
-**Option A — recommended: AWS CLI shared credentials**
-```bash
-aws configure
-# Enter your Access Key ID, Secret Access Key, region (e.g. us-east-1), output format (json)
-```
-boto3 finds these automatically — no code or config file needed.
-
-**Option B — quick local demo: `.env` file**
-```bash
-cp .env.example .env
-# then edit .env and fill in:
-#   AWS_ACCESS_KEY_ID=...
-#   AWS_SECRET_ACCESS_KEY=...
-#   AWS_DEFAULT_REGION=us-east-1
-```
-`.env` is already in `.gitignore` — never commit real credentials.
-
-### Install and run
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
+python -m venv .venv
+# Windows PowerShell
+.\.venv\Scripts\Activate.ps1
+# macOS/Linux: source .venv/bin/activate
 
 pip install -r requirements.txt
+```
 
+### Configure AWS credentials
+
+Preferred: configure a local AWS CLI profile:
+
+```bash
+aws configure
+```
+
+Or use a local `.env` file:
+
+```bash
+cp .env.example .env
+```
+
+Fill the credential values in `.env`. It is ignored by Git; never commit real credentials.
+
+## Run
+
+```bash
 streamlit run app.py
 ```
 
-Streamlit will open `http://localhost:8501` in your browser.
+Open the local URL printed by Streamlit, upload a JPG or PNG up to 5 MB, then select **Run Scan**.
 
----
+## Project layout
 
-## 6. Using the app
+```text
+app.py                       Streamlit UI and orchestration
+src/rekognition_client.py    Rekognition client and response parsing
+src/image_utils.py           Bounding-box rendering
+src/report.py                Summary and detail tables
+iam-policy.json              Minimal IAM policy
+.env.example                 Safe configuration template
+```
 
-1. Upload a JPG/PNG of a tray or checkout surface (up to 5MB).
-2. Optionally adjust the confidence threshold or max label count in the
-   sidebar.
-3. Click **Run Scan**.
-4. Review the annotated image (bounding boxes + labels), the summary table,
-   and the metrics (items located, distinct types, average confidence).
-5. Export the summary as CSV, or expand the detailed audit view / raw JSON
-   for a full inspection.
+## Security
 
----
+The app does not store credentials. `.env`, Streamlit secrets, virtual environments, and common credential file formats are excluded through `.gitignore`.
 
-## 7. Pitch notes for evaluators
+## License
 
-- **Key innovation:** real-time, multi-object detection with zero local
-  GPU/ML infrastructure — all inference runs on AWS's managed Rekognition
-  service, called through a simple `boto3` API request.
-- **No barcode dependency:** works on loose/unbarcoded goods (produce,
-  bakery items) where traditional POS scanning fails.
-- **Auditability:** every detection includes a confidence score and, where
-  available, exact spatial coordinates — useful for staff verification and
-  building a defensible audit trail.
-- **Scalability path:** the current build uses Rekognition's general
-  `detect_labels` API (recognizes broad categories like "Apple" or
-  "Fruit"). The natural next step is **Amazon Rekognition Custom
-  Labels**, trained on your own product photos, to distinguish specific
-  SKUs — e.g. a Gala Apple vs. a Fuji Apple, or your store's specific
-  pastry line — which would let this evolve from an object scanner into a
-  true visual point-of-sale system with per-item pricing lookups.
-
-## 8. Cost notes
-
-Amazon Rekognition's Free Tier includes 5,000 images/month for label
-detection during your first 12 months; beyond that it's a small per-image
-charge (check current pricing on the AWS Rekognition pricing page). This
-app makes exactly one Rekognition call per scan, so cost scales linearly
-and predictably with usage.
-
-## 9. Troubleshooting
-
-| Problem | Likely cause |
-|---|---|
-| "AWS credentials not found" | Run `aws configure`, or fill in `.env` and restart Streamlit. |
-| "AWS rejected these credentials or permissions" | Your IAM user/role is missing the `rekognition:DetectLabels` permission — attach `iam-policy.json`. |
-| Boxes look mis-positioned | Make sure you're viewing the **Annotated** tab, not the Original — boxes are only drawn on the annotated copy. |
-| "Image too large" error | Rekognition's inline-bytes limit is 5MB; resize/compress the photo before uploading. |
+No license has been selected yet. Add one before distributing or accepting external contributions.
